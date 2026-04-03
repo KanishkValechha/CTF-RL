@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-ctf-env"
+version = "0.1.0"
+description = "CTF Vulnerability Discovery Environment for OpenEnv — AI security researcher sandbox"
+requires-python = ">=3.10"
+dependencies = [
+    "openenv-core[core]>=0.2.2",
+    "fastapi>=0.115.0",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.24.0",
+    "requests>=2.31.0",
+    "flask>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+server = "ctf_env.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["ctf_env", "ctf_env.server", "ctf_env.server.tasks", "ctf_env.server.vulnerable_app", "ctf_env.server.vulnerable_app.routes"]
+package-dir = { "ctf_env" = ".", "ctf_env.server" = "server" }
