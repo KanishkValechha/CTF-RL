@@ -20,10 +20,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
-<<<<<<< HEAD
     "websockets>=12.0",
-=======
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 ]
 
 [project.scripts]

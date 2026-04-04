@@ -2,7 +2,6 @@
 Baseline Inference Script for the CTF Environment.
 
 Runs an LLM agent through all three CTF tasks using the OpenAI-compatible API.
-<<<<<<< HEAD
 Emits [START]/[STEP]/[END] on stdout as required by the OpenEnv submission spec.
 Human-readable progress goes to stderr so automated parsers see only structured lines.
 
@@ -13,30 +12,16 @@ Mandatory configuration (set in environment):
 
 Also supported: OPENAI_API_KEY, GEMINI_API_KEY (used if HF_TOKEN unset, depending on provider).
 ENV_URL          CTF server origin (default: deployed Space URL)
-=======
-Emits [START]/[STEP]/[END] log lines as required by the OpenEnv submission spec.
-
-Environment Variables:
-    API_BASE_URL: Base URL for the OpenAI-compatible API
-    MODEL_NAME:   Model identifier (e.g., "Qwen/Qwen2.5-72B-Instruct")
-    HF_TOKEN:     HuggingFace token used as API key
-    ENV_URL:      Base URL for the CTF environment server (default: http://localhost:8000)
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 
 Usage:
     python inference.py
 """
 
-<<<<<<< HEAD
 import asyncio
-=======
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 import json
 import os
 import sys
-import time
 
-<<<<<<< HEAD
 from openai import AsyncOpenAI
 
 # ── Configuration (defaults match common HF + Gemini setups) ──
@@ -51,15 +36,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Public Space UI: https://huggingface.co/spaces/swar16/ctf_env
 # MCPToolClient expects the Space *app* origin (typically https://<owner>-<repo>.hf.space).
 ENV_URL = os.getenv("ENV_URL", "https://swar16-ctf-env.hf.space")
-=======
-from openai import OpenAI
-
-# ── Configuration ──
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN", "")
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 MAX_STEPS = 30
 
 # Tasks to run
@@ -206,20 +182,12 @@ def format_tools_for_openai() -> list[dict]:
     ]
 
 
-<<<<<<< HEAD
 async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[bool, float, int]:
-=======
-def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, int]:
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
     """
     Run a single CTF task.
 
     Args:
-<<<<<<< HEAD
         client: AsyncOpenAI API client
-=======
-        client: OpenAI API client
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
         env_client: CTF environment client
         task_name: Name of the task to run
 
@@ -234,25 +202,11 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
     success = False
 
     try:
-<<<<<<< HEAD
-        # Reset environment with task -> make sure to await!
         await env_client.reset(task=task_name)
 
-        # Get available tools
-        tools = await env_client.list_tools()
+        await env_client.list_tools()
 
-        # Initial message with task info
         task_info = await env_client.call_tool("get_task_info")
-=======
-        # Reset environment with task
-        env_client.reset(task=task_name)
-
-        # Get available tools
-        tools = env_client.list_tools()
-
-        # Initial message with task info
-        task_info = env_client.call_tool("get_task_info")
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -273,12 +227,7 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                 break
 
             try:
-                # Ask LLM what to do
-<<<<<<< HEAD
                 completion = await client.chat.completions.create(
-=======
-                completion = client.chat.completions.create(
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
                     model=MODEL_NAME,
                     messages=messages,
                     tools=format_tools_for_openai(),
@@ -290,9 +239,7 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                 choice = completion.choices[0]
                 message = choice.message
 
-                # Handle tool calls
                 if message.tool_calls:
-                    # Add assistant message with tool calls
                     messages.append(message.model_dump())
 
                     for tool_call in message.tool_calls:
@@ -302,19 +249,13 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                         except json.JSONDecodeError:
                             func_args = {}
 
-                        # Execute tool via environment
                         try:
-<<<<<<< HEAD
                             result = await env_client.call_tool(func_name, **func_args)
-=======
-                            result = env_client.call_tool(func_name, **func_args)
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
                             error = None
                         except Exception as e:
                             result = {"error": str(e)}
                             error = str(e)
 
-                        # Extract reward from result metadata
                         reward = 0.0
                         if isinstance(result, dict):
                             reward = result.get("score", 0.0)
@@ -337,7 +278,6 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                             error=error,
                         )
 
-                        # Add tool result to conversation
                         messages.append(
                             {
                                 "role": "tool",
@@ -347,7 +287,6 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                         )
 
                 elif message.content:
-                    # LLM responded with text instead of tool call
                     messages.append({"role": "assistant", "content": message.content})
                     messages.append(
                         {
@@ -357,7 +296,6 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                     )
 
                 else:
-                    # Empty response — nudge the LLM
                     messages.append(
                         {
                             "role": "user",
@@ -372,11 +310,7 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
                 break
 
     except Exception as e:
-<<<<<<< HEAD
         print(f"[ERROR] Task {task_name} failed: {e}", file=sys.stderr, flush=True)
-=======
-        print(f"[ERROR] Task {task_name} failed: {e}", flush=True)
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 
     if not rewards:
         rewards = [0.0]
@@ -385,22 +319,11 @@ def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, i
     return success, score, steps_taken
 
 
-<<<<<<< HEAD
 async def main():
     """Main entry point — run all CTF tasks."""
     api_key = HF_TOKEN or OPENAI_API_KEY or GEMINI_API_KEY or "dummy"
     client = AsyncOpenAI(base_url=API_BASE_URL, api_key=api_key)
-=======
-def main():
-    """Main entry point — run all CTF tasks."""
-    # Initialize OpenAI client
-    client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=HF_TOKEN or os.getenv("OPENAI_API_KEY", "dummy"),
-    )
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
 
-    # Initialize environment client
     try:
         from ctf_env import CtfEnv
         env_client = CtfEnv(base_url=ENV_URL)
@@ -414,24 +337,14 @@ def main():
 
     try:
         for task_name in TASKS:
-<<<<<<< HEAD
             print(f"\n{'='*60}", file=sys.stderr, flush=True)
             print(f"Starting task: {task_name}", file=sys.stderr, flush=True)
             print(f"{'='*60}\n", file=sys.stderr, flush=True)
 
             success, score, steps = await run_task(client, env_client, task_name)
-=======
-            print(f"\n{'='*60}", flush=True)
-            print(f"Starting task: {task_name}", flush=True)
-            print(f"{'='*60}\n", flush=True)
-
-            success, score, steps = run_task(client, env_client, task_name)
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
             total_score += score
             results.append({"task": task_name, "success": success, "score": score, "steps": steps})
 
-            # Brief pause between tasks
-<<<<<<< HEAD
             await asyncio.sleep(1)
 
     finally:
@@ -457,23 +370,3 @@ def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-=======
-            time.sleep(1)
-
-    finally:
-        env_client.close()
-
-    # Print summary
-    print(f"\n{'='*60}", flush=True)
-    print("FINAL RESULTS", flush=True)
-    print(f"{'='*60}", flush=True)
-    for r in results:
-        status = "✅" if r["success"] else "❌"
-        print(f"  {status} {r['task']}: score={r['score']:.3f} steps={r['steps']}", flush=True)
-    print(f"\n  Average Score: {total_score / total_tasks:.3f}", flush=True)
-    print(f"{'='*60}\n", flush=True)
-
-
-if __name__ == "__main__":
-    main()
->>>>>>> b5dab151cd8ae0a5ea0154a50ec2b07abe729289
