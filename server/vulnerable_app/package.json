@@ -1,0 +1,20 @@
+{
+  "name": "ctf-vulnerable-app",
+  "version": "1.0.0",
+  "description": "Deliberately vulnerable e-commerce application for CTF RL environment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js --port 5001 --db ./test.db"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "better-sqlite3": "^11.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "cookie-parser": "^1.4.7",
+    "ejs": "^3.1.10",
+    "axios": "^1.7.9"
+  }
+}

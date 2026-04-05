@@ -1,0 +1,1 @@
+FLAG{path_traversal_read_2024}
