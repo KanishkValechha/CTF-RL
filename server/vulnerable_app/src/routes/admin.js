@@ -138,7 +138,7 @@ router.delete('/users/:id', requireAuth, (req, res) => {
  * The 'filename' parameter is passed directly to child_process.exec()
  * without sanitization.
  *
- * Exploit: filename = "; cat flag.txt #"
+ * Exploit: filename = "&& cat .secret_flag #"
  */
 router.post('/export', requireAuth, (req, res) => {
   const { filename, format } = req.body;
@@ -149,8 +149,7 @@ router.post('/export', requireAuth, (req, res) => {
 
   // VULNERABILITY: Command injection via unsanitized filename (CWE-78)
   // Secure version would use execFile() with an array of arguments
-  // VULNERABILITY: Command injection via unsanitized filename (CWE-78)
-  // The cwd is set to the app root where flag.txt lives
+  // The cwd is set to the app root where .secret_flag lives
   const appRoot = require('path').join(__dirname, '..', '..');
   // NOTE: filename is NOT inside quotes, allowing shell metacharacter injection
   const command = `echo Exporting data to ${filename} && ls -la`;

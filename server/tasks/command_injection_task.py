@@ -39,7 +39,7 @@ command_injection_task = BaseTask(
     ],
     hints=[
         "The admin export endpoint uses child_process.exec",
-        "The filename parameter is not sanitized",
-        "Try injecting shell commands via the filename",
+        "The filename parameter is not sanitized — look for a hidden flag file in the app root",
+        "Try injecting shell commands via the filename to read .secret_flag",
     ],
 )
