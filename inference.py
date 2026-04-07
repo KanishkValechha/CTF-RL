@@ -6,14 +6,16 @@ Emits [START]/[STEP]/[END] on stdout as required by the OpenEnv submission spec.
 Human-readable progress goes to stderr so automated parsers see only structured lines.
 
 Mandatory configuration (set in environment):
-    API_BASE_URL   OpenAI-compatible API endpoint
-    MODEL_NAME     Model id for chat completions
-    HF_TOKEN       Hugging Face token (or generic API key for the chosen base URL)
+    OPENROUTER_API_KEY   Your OpenRouter API key (get one at https://openrouter.ai/keys)
+    ENV_URL              CTF server origin (default: http://localhost:8000)
 
-Also supported: OPENAI_API_KEY, GEMINI_API_KEY (used if HF_TOKEN unset, depending on provider).
-ENV_URL          CTF server origin (default: deployed Space URL)
+Optional overrides:
+    API_BASE_URL   OpenAI-compatible API endpoint (default: OpenRouter)
+    MODEL_NAME     Model id for chat completions (default: openrouter/free)
 
 Usage:
+    export OPENROUTER_API_KEY="sk-or-v1-..."
+    export ENV_URL="http://localhost:8000"
     python inference.py
 """
 
@@ -24,18 +26,15 @@ import sys
 
 from openai import AsyncOpenAI
 
-# ── Configuration (defaults match common HF + Gemini setups) ──
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "https://generativelanguage.googleapis.com/v1beta/openai/",
-)
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+# ── Configuration (defaults to OpenRouter free tier) ──
+API_BASE_URL = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "qwen/qwen3.6-plus:free")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+# Legacy keys still supported as fallback
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-# Public Space UI: https://huggingface.co/spaces/swar16/ctf_env
-# MCPToolClient expects the Space *app* origin (typically https://<owner>-<repo>.hf.space).
-ENV_URL = os.getenv("ENV_URL", "https://swar16-ctf-env.hf.space")
+ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 MAX_STEPS = 30
 
 # Tasks to run
@@ -321,8 +320,15 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
 
 async def main():
     """Main entry point — run all CTF tasks."""
-    api_key = HF_TOKEN or OPENAI_API_KEY or GEMINI_API_KEY or "dummy"
-    client = AsyncOpenAI(base_url=API_BASE_URL, api_key=api_key)
+    api_key = OPENROUTER_API_KEY or HF_TOKEN or OPENAI_API_KEY or GEMINI_API_KEY or "dummy"
+    client = AsyncOpenAI(
+        base_url=API_BASE_URL,
+        api_key=api_key,
+        default_headers={
+            "HTTP-Referer": "https://github.com/ctf-rl",  # Required by OpenRouter
+            "X-Title": "CTF-RL Environment",               # Optional, shows in OpenRouter dashboard
+        },
+    )
 
     try:
         from ctf_env import CtfEnv
