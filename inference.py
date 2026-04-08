@@ -5,18 +5,14 @@ Runs an LLM agent through all three CTF tasks using the OpenAI-compatible API.
 Emits [START]/[STEP]/[END] on stdout as required by the OpenEnv submission spec.
 Human-readable progress goes to stderr so automated parsers see only structured lines.
 
-Mandatory configuration (set in environment):
-    OPENROUTER_API_KEY   Your OpenRouter API key (get one at https://openrouter.ai/keys)
-    ENV_URL              CTF server origin (default: http://localhost:8000)
+Required environment variables:
+    API_BASE_URL   OpenAI-compatible API endpoint
+    MODEL_NAME     Model id for chat completions
+    HF_TOKEN       Provider API key/token
 
-Optional overrides:
-    API_BASE_URL   OpenAI-compatible API endpoint (default: OpenRouter)
-    MODEL_NAME     Model id for chat completions (default: openrouter/free)
-
-Usage:
-    export OPENROUTER_API_KEY="sk-or-v1-..."
-    export ENV_URL="http://localhost:8000"
-    python inference.py
+Optional environment variables:
+    LOCAL_IMAGE_NAME   Local Docker image name when using from_docker_image()
+    ENV_URL            CTF server origin for HTTP-based local testing
 """
 
 import asyncio
@@ -25,17 +21,14 @@ import os
 import sys
 from typing import Any
 
-from openai import AsyncOpenAI
+from openai import OpenAI
 from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 
 # ── Configuration (defaults to OpenRouter free tier) ──
 API_BASE_URL = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "qwen/qwen3.6-plus:free")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-# Legacy keys still supported as fallback
-HF_TOKEN = os.getenv("HF_TOKEN", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
 MAX_STEPS = 30
 
@@ -221,12 +214,12 @@ async def step_tool(env_client, name: str, **kwargs: Any) -> tuple[Any, float, b
     return result, reward, done
 
 
-async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[bool, float, int]:
+async def run_task(client: OpenAI, env_client, task_name: str) -> tuple[bool, float, int]:
     """
     Run a single CTF task.
 
     Args:
-        client: AsyncOpenAI API client
+        client: OpenAI API client
         env_client: CTF environment client
         task_name: Name of the task to run
 
@@ -267,7 +260,8 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
             llm_turns += 1
 
             try:
-                completion = await client.chat.completions.create(
+                completion = await asyncio.to_thread(
+                    client.chat.completions.create,
                     model=MODEL_NAME,
                     messages=messages,
                     tools=format_tools_for_openai(),
@@ -379,22 +373,26 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
 
 async def main():
     """Main entry point — run all CTF tasks."""
-    api_key = OPENROUTER_API_KEY or HF_TOKEN or OPENAI_API_KEY or GEMINI_API_KEY or "dummy"
-    client = AsyncOpenAI(
+    if not HF_TOKEN:
+        raise RuntimeError("HF_TOKEN must be set before running inference.py")
+
+    client = OpenAI(
         base_url=API_BASE_URL,
-        api_key=api_key,
-        default_headers={
-            "HTTP-Referer": "https://github.com/ctf-rl",  # Required by OpenRouter
-            "X-Title": "CTF-RL Environment",               # Optional, shows in OpenRouter dashboard
-        },
+        api_key=HF_TOKEN,
     )
 
     try:
         from ctf_env import CtfEnv
-        env_client = CtfEnv(base_url=ENV_URL)
+        if LOCAL_IMAGE_NAME:
+            env_client = await CtfEnv.from_docker_image(LOCAL_IMAGE_NAME)
+        else:
+            env_client = CtfEnv(base_url=ENV_URL)
     except ImportError:
         from client import CtfEnv
-        env_client = CtfEnv(base_url=ENV_URL)
+        if LOCAL_IMAGE_NAME:
+            env_client = await CtfEnv.from_docker_image(LOCAL_IMAGE_NAME)
+        else:
+            env_client = CtfEnv(base_url=ENV_URL)
 
     total_score = 0.0
     total_tasks = len(TASKS)

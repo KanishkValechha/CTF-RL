@@ -95,13 +95,13 @@ ctf_env/
 5. **Judge-style check — `inference.py`:** run locally against the deployed URL (needs an LLM API key — see below):
    ```bash
    set ENV_URL=https://swar16-ctf-env.hf.space
-   set GEMINI_API_KEY=your_key
+   set HF_TOKEN=your_api_key
    cd ctf_env
    python inference.py
    ```
    Confirm stdout includes `[START]`, `[STEP]`, and `[END]` lines for each task, with partial rewards appearing before final flag submission when milestone progress is made.
 
-**Secrets you must supply locally (never commit keys):** one of `OPENROUTER_API_KEY`, `HF_TOKEN`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` depending on `API_BASE_URL` / `MODEL_NAME`. Judges use their own model endpoint; your Space only runs the environment.
+**Secrets you must supply locally (never commit keys):** set `HF_TOKEN` to the API key for whatever OpenAI-compatible provider you are using with `API_BASE_URL` / `MODEL_NAME`. Judges use their own model endpoint; your Space only runs the environment.
 
 ---
 
@@ -139,7 +139,7 @@ This script acts as a hardcoded "perfect" agent, verifying the MCP tools, exploi
 | Check | Expected outcome |
 | :--- | :--- |
 | **Oracle agent** (`test_integration.py`, no LLM) | **1.0** on the three benchmark tasks and passing extended local validations when flags are submitted correctly. |
-| **LLM baseline** (`inference.py`) | Varies by model and provider; run locally with `API_BASE_URL`, `MODEL_NAME`, and one of **`OPENROUTER_API_KEY`**, **`HF_TOKEN`**, **`OPENAI_API_KEY`**, or **`GEMINI_API_KEY`**. Stdout contains only **`[START]`**, **`[STEP]`**, **`[END]`** lines for parsers, and the step rewards preserve partial grading from OpenEnv. |
+| **LLM baseline** (`inference.py`) | Varies by model and provider; run locally with `API_BASE_URL`, `MODEL_NAME`, and **`HF_TOKEN`**. Stdout contains only **`[START]`**, **`[STEP]`**, **`[END]`** lines for parsers, and the step rewards preserve partial grading from OpenEnv. |
 
 Pre-submission validator (organizer script): pass your Space app URL, e.g.  
 `./validate-submission.sh https://swar16-ctf-env.hf.space ./ctf_env`  
