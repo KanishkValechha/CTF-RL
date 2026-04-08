@@ -23,8 +23,10 @@ import asyncio
 import json
 import os
 import sys
+from typing import Any
 
 from openai import AsyncOpenAI
+from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 
 # ── Configuration (defaults to OpenRouter free tier) ──
 API_BASE_URL = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1")
@@ -181,6 +183,44 @@ def format_tools_for_openai() -> list[dict]:
     ]
 
 
+def unwrap_tool_result(result: Any) -> Any:
+    """Extract plain tool data from OpenEnv/FastMCP wrappers."""
+    if hasattr(result, "data"):
+        return result.data
+    if isinstance(result, dict) and "data" in result:
+        return result["data"]
+    return result
+
+
+async def step_tool(env_client, name: str, **kwargs: Any) -> tuple[Any, float, bool]:
+    """
+    Execute a tool call through OpenEnv's step API.
+
+    This preserves per-step reward and done signals, which are lost when
+    using `call_tool()` directly because that helper returns only the raw
+    tool result.
+    """
+    step_result = await env_client.step(
+        CallToolAction(tool_name=name, arguments=kwargs)
+    )
+    observation = step_result.observation
+
+    if isinstance(observation, CallToolObservation) and observation.error is not None:
+        error_message = observation.error.message
+        error_type = getattr(observation.error, "error_type", None)
+        if error_type is not None:
+            error_message = f"{error_message} (type: {error_type.value})"
+        raise RuntimeError(error_message)
+
+    result = observation
+    if isinstance(observation, CallToolObservation):
+        result = unwrap_tool_result(observation.result)
+
+    reward = float(step_result.reward or 0.0)
+    done = bool(step_result.done)
+    return result, reward, done
+
+
 async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[bool, float, int]:
     """
     Run a single CTF task.
@@ -199,13 +239,14 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
     steps_taken = 0
     score = 0.0
     success = False
+    current_score = 0.0
 
     try:
         await env_client.reset(task=task_name)
 
         await env_client.list_tools()
 
-        task_info = await env_client.call_tool("get_task_info")
+        task_info, _, _ = await step_tool(env_client, "get_task_info")
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -220,10 +261,10 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
         ]
 
         done = False
+        llm_turns = 0
 
-        for step in range(1, MAX_STEPS + 1):
-            if done:
-                break
+        while not done and steps_taken < MAX_STEPS and llm_turns < MAX_STEPS:
+            llm_turns += 1
 
             try:
                 completion = await client.chat.completions.create(
@@ -242,6 +283,10 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
                     messages.append(message.model_dump())
 
                     for tool_call in message.tool_calls:
+                        if done or steps_taken >= MAX_STEPS:
+                            break
+
+                        steps_taken += 1
                         func_name = tool_call.function.name
                         try:
                             func_args = json.loads(tool_call.function.arguments)
@@ -249,28 +294,34 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
                             func_args = {}
 
                         try:
-                            result = await env_client.call_tool(func_name, **func_args)
+                            result, reward, tool_done = await step_tool(
+                                env_client,
+                                func_name,
+                                **func_args,
+                            )
                             error = None
                         except Exception as e:
                             result = {"error": str(e)}
+                            reward = 0.0
+                            tool_done = False
                             error = str(e)
 
-                        reward = 0.0
+                        done = tool_done
+                        if done:
+                            current_score = reward
+                        else:
+                            current_score = max(0.0, min(1.0, current_score + reward))
+
                         if isinstance(result, dict):
-                            reward = result.get("score", 0.0)
                             if result.get("correct") is True:
-                                done = True
                                 success = True
-                                score = result.get("score", 0.0)
-                            if "grade_summary" in result and result.get("correct") is False:
-                                done = True
+                        score = current_score
 
                         rewards.append(reward)
-                        steps_taken = step
 
                         action_str = f"{func_name}({json.dumps(func_args)[:100]})"
                         log_step(
-                            step=step,
+                            step=steps_taken,
                             action=action_str,
                             reward=reward,
                             done=done,
@@ -284,6 +335,9 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
                                 "content": json.dumps(result)[:4000],
                             }
                         )
+
+                        if done:
+                            break
 
                 elif message.content:
                     messages.append({"role": "assistant", "content": message.content})
@@ -303,8 +357,13 @@ async def run_task(client: AsyncOpenAI, env_client, task_name: str) -> tuple[boo
                     )
 
             except Exception as e:
-                log_step(step=step, action="error", reward=0.0, done=False, error=str(e))
-                steps_taken = step
+                log_step(
+                    step=max(steps_taken, 1),
+                    action="error",
+                    reward=0.0,
+                    done=False,
+                    error=str(e),
+                )
                 rewards.append(0.0)
                 break
 

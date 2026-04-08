@@ -13,7 +13,7 @@ Example:
     >>> with CtfEnv(base_url="http://localhost:8000") as env:
     ...     env.reset(task="sqli_login")
     ...     tools = env.list_tools()
-    ...     result = env.call_tool("view_source", file_path="routes/auth.py")
+    ...     result = env.call_tool("view_source", file_path="src/routes/auth.js")
     ...     print(result)
 """
 
