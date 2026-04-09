@@ -407,13 +407,18 @@ class RewardTracker:
 
     def calculate_reward(self) -> float:
         """
-        Calculate current cumulative reward (0.0 - 1.0).
+        Calculate current cumulative reward — strictly within (0.0, 1.0).
+
+        The OpenEnv spec requires scores to be strictly between 0 and 1
+        (exclusive on both ends: not 0.0 and not 1.0).
 
         Components:
         - Milestone progress: sum of achieved milestone values
         - Elegance bonus: reward for efficiency
         - Noise penalty: penalty for unproductive actions
         """
+        EPSILON = 0.001  # Guard band to stay strictly inside (0, 1)
+
         # Base: sum of milestone rewards
         task_milestones = {m.name: m.reward_value for m in self.task.milestones}
         base = sum(task_milestones.get(name, 0) for name in self.milestones_achieved)
@@ -425,7 +430,8 @@ class RewardTracker:
         noise_penalty = self._noise_penalty()
 
         raw = base + elegance - noise_penalty
-        return min(1.0, max(0.0, round(raw, 4)))
+        # Clamp strictly within (0, 1) — never exactly 0.0 or 1.0
+        return min(1.0 - EPSILON, max(EPSILON, round(raw, 4)))
 
     def _elegance_bonus(self) -> float:
         """Calculate elegance bonus based on step efficiency."""
