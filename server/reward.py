@@ -407,16 +407,31 @@ class RewardTracker:
 
     def calculate_reward(self) -> float:
         """
-        Calculate current cumulative reward (0.0 - 1.0).
+        Calculate current cumulative reward — strictly within (0.0, 1.0).
+
+        The OpenEnv spec requires scores to be strictly between 0 and 1
+        (exclusive on both ends: not 0.0 and not 1.0).
+
+        The reward is built so that 0.0 and 1.0 are naturally unreachable:
+        - BASE_REWARD (0.01) ensures even a do-nothing agent scores above 0.
+        - MILESTONE_SCALE (0.90) caps milestone contribution at 0.90, so
+          even a perfect run with max elegance bonus tops out at ~0.99.
+        - EPSILON is a last-resort safety net for extreme noise edge cases.
 
         Components:
-        - Milestone progress: sum of achieved milestone values
-        - Elegance bonus: reward for efficiency
-        - Noise penalty: penalty for unproductive actions
+        - Base participation reward: 0.01 (agent started the episode)
+        - Milestone progress: sum of achieved milestones, scaled to max 0.90
+        - Elegance bonus: efficiency reward (-0.04 to +0.08)
+        - Noise penalty: unproductive action penalty (0.0 to 0.20)
         """
-        # Base: sum of milestone rewards
+        EPSILON = 0.001      # Last-resort safety net
+        BASE_REWARD = 0.01   # Participation credit — score is never 0
+        MILESTONE_SCALE = 0.90  # Milestones contribute at most 0.90
+
+        # Milestone progress (task files define weights summing to 1.0,
+        # we scale down so the max milestone contribution is 0.90)
         task_milestones = {m.name: m.reward_value for m in self.task.milestones}
-        base = sum(task_milestones.get(name, 0) for name in self.milestones_achieved)
+        milestone_sum = sum(task_milestones.get(name, 0) for name in self.milestones_achieved)
 
         # Elegance bonus
         elegance = self._elegance_bonus()
@@ -424,23 +439,29 @@ class RewardTracker:
         # Noise penalty
         noise_penalty = self._noise_penalty()
 
-        raw = base + elegance - noise_penalty
-        return min(1.0, max(0.0, round(raw, 4)))
+        raw = BASE_REWARD + (milestone_sum * MILESTONE_SCALE) + elegance - noise_penalty
+        # Safety net clamp — should rarely trigger with the above design
+        return min(1.0 - EPSILON, max(EPSILON, round(raw, 4)))
 
     def _elegance_bonus(self) -> float:
-        """Calculate elegance bonus based on step efficiency."""
+        """
+        Calculate elegance bonus based on step efficiency.
+
+        Scaled so that the maximum bonus (0.08) keeps the total
+        reward ceiling at ~0.99 (0.01 base + 0.90 milestones + 0.08).
+        """
         if self.total_steps == 0 or "flag_captured" not in self.milestones_achieved:
             return 0.0
 
         ratio = self.total_steps / self.task.optimal_steps
         if ratio <= 1.5:
-            return 0.10
+            return 0.08
         elif ratio <= 3.0:
-            return 0.05
+            return 0.04
         elif ratio <= 5.0:
             return 0.0
         else:
-            return -0.05
+            return -0.04
 
     def _noise_penalty(self) -> float:
         """Calculate noise penalty."""
