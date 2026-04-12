@@ -294,11 +294,12 @@ class CTFEnvironment(MCPEnvironment):
             else:
                 summary = {}
 
-            env_ref._done = True
+            if correct:
+                env_ref._done = True
 
             return FlagSubmissionResponseModel(
                 correct=correct,
-                message="Flag captured! Well done!" if correct else "Incorrect flag. Keep trying!",
+                message="Flag captured! Well done!" if correct else "Incorrect flag. Try again.",
                 score=float(summary.get("final_score", 0.0)),
                 grade_summary=summary,
             ).model_dump()
