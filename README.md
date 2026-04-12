@@ -1,5 +1,5 @@
----
-title: CTF Vulnerability Sandbox
+﻿---
+title: OpenEnv Web Security Benchmark
 emoji: 🛡️
 colorFrom: blue
 colorTo: red
@@ -9,17 +9,28 @@ tags:
   - openenv
   - security
   - benchmark
+  - agent-evaluation
+  - cybersecurity
 ---
 
-# OpenEnv CTF Vulnerability Sandbox
+# OpenEnv Web Security Benchmark
 
-This repository packages a **10-task web-security agent benchmark** for OpenEnv. Each episode launches an isolated vulnerable Node.js application, exposes a tool-based interface for source inspection and HTTP interaction, and grades the agent with deterministic rewards in **`[0.0, 1.0]`**.
+A **10-task web-security agent benchmark** for OpenEnv, built around a realistic vulnerable Node.js application and a stable judge-facing tool contract.
 
-The benchmark is designed to feel closer to a real application-security workflow than a toy CTF:
-- agents read source files and configuration rather than receiving exploit strings
-- exploit chains span authentication, access-control, business-logic, SSRF, XSS, and unsafe code execution
-- graders award **partial, deterministic milestone credit** for meaningful progress, not just binary flag capture
-- noisy probing is tracked through `noise_penalty`, `precision_bonus`, and `detection_risk`
+Each episode launches a fresh target app, lets the agent inspect source and send HTTP requests, and returns deterministic rewards in **`[0.0, 1.0]`**.
+
+## Quick links
+
+- GitHub repo: [swar16/MetaHack-CTFEnv](https://github.com/swar16/MetaHack-CTFEnv)
+- Hugging Face Space: [swar16/ctf_env](https://huggingface.co/spaces/swar16/ctf_env)
+- Live Space URL: [https://swar16-ctf-env.hf.space](https://swar16-ctf-env.hf.space)
+
+## Why this benchmark is useful
+
+- models a real agent workflow: read code, trace auth paths, exploit the app, and prove impact
+- spans varied security domains: SQLi, IDOR, business-logic abuse, JWT misuse, SSRF, XSS, path traversal, and unsafe import/deserialization
+- uses **partial, deterministic milestone grading**, not just sparse binary flag capture
+- tracks exploit quality via `precision_bonus`, `noise_penalty`, and `detection_risk`
 
 ## Benchmark surface
 
@@ -66,6 +77,14 @@ Scoring is deterministic and bounded:
   - `detection_risk`
 
 This keeps the environment faithful to the hackathon grading expectations while still offering meaningful intermediate learning signal.
+
+## Validation snapshot
+
+The current public build is validated end to end:
+- `openenv validate` passes
+- local `test_integration.py` passes all `16/16` checks
+- Docker builds successfully and serves healthy `/schema` and `/reset` endpoints
+- the public Hugging Face Space is running on the synced benchmark snapshot
 
 ## Project layout
 
@@ -161,15 +180,15 @@ uv run python inference.py
 
 ## Hugging Face Space deployment
 
-The benchmark is packaged for a Docker Space. A validated deployment is available at:
-- Space repo: [swar16/ctf-rl](https://huggingface.co/spaces/swar16/ctf-rl)
-- Live URL: [https://swar16-ctf-rl.hf.space](https://swar16-ctf-rl.hf.space)
+The benchmark is packaged for a Docker Space. The validated public deployment is:
+- Space repo: [swar16/ctf_env](https://huggingface.co/spaces/swar16/ctf_env)
+- Live URL: [https://swar16-ctf-env.hf.space](https://swar16-ctf-env.hf.space)
 
 To deploy your own copy:
 
 ```bash
-uv run hf repos create <username>/ctf-rl --type space --space-sdk docker --public
-openenv push --repo-id <username>/ctf-rl
+uv run hf repos create <username>/ctf-env --type space --space-sdk docker --public
+openenv push --repo-id <username>/ctf-env
 ```
 
 Judge-facing checks to keep green:
@@ -185,6 +204,6 @@ This repository keeps the judge-facing contracts stable:
 - Docker still serves the app on port `8000`
 - the benchmark trio in `inference.py` is unchanged
 - all public tool names and response semantics remain additive-compatible
-- partial reward reporting now reflects the environment’s true milestone grading
+- partial reward reporting now reflects the environment's true milestone grading
 
 If you want to extend the benchmark further after submission, the safest next step is to add new tasks or stronger hard-mode variants without changing the existing tool or scoring contract.
