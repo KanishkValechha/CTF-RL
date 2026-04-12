@@ -85,14 +85,14 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str | Non
     """Emit [STEP] log line."""
     error_str = "null" if error is None else error
     print(
-        f"[STEP] step={step} action={action} reward={reward:.4f} done={str(done).lower()} error={error_str}",
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error_str}",
         flush=True,
     )
 
 
 def log_end(success: bool, steps: int, score: float, rewards: list[float]):
     """Emit [END] log line."""
-    rewards_str = ",".join(f"{r:.4f}" for r in rewards)
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
         f"[END] success={str(success).lower()} steps={steps} score={format_task_score(score)} rewards={rewards_str}",
         flush=True,
