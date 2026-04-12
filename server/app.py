@@ -12,14 +12,12 @@ Usage:
     uvicorn server.app:app --host 0.0.0.0 --port 8000
 """
 
-try:
-    from openenv.core.env_server.http_server import create_app
-    from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
+from openenv.core.env_server.http_server import create_app
+from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 
+try:
     from .ctf_environment import CTFEnvironment
 except ImportError:
-    from openenv.core.env_server.http_server import create_app
-    from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
     from server.ctf_environment import CTFEnvironment
 
 # Create the app with the CTFEnvironment class (factory pattern)

@@ -667,7 +667,7 @@ async def test_score_invariants():
         assert 0.0 <= summary.get("final_score", -1.0) <= 1.0, summary
         assert 0.0 <= summary.get("precision_bonus", -1.0) <= 1.0, summary
         assert 0.0 <= summary.get("detection_risk", -1.0) <= 1.0, summary
-        assert summary.get("noise_penalty", 1.0) <= 0.0, summary
+        assert 0.0 <= summary.get("noise_penalty", 0.0) <= 0.2, summary
 
 
 async def main():

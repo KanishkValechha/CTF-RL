@@ -17,12 +17,8 @@ from uuid import uuid4
 
 import requests as http_requests
 
-try:
-    from openenv.core.env_server.mcp_environment import MCPEnvironment
-    from openenv.core.env_server.types import Action, Observation, State
-except ImportError:
-    from openenv.core.env_server.mcp_environment import MCPEnvironment
-    from openenv.core.env_server.types import Action, Observation, State
+from openenv.core.env_server.mcp_environment import MCPEnvironment
+from openenv.core.env_server.types import Action, Observation, State
 
 from fastmcp import FastMCP
 from models import (
@@ -50,45 +46,11 @@ from .reward import RewardTracker
 from .graders import TaskGrader
 
 
-# ── Constants (previously from Flask config.py) ──
+# ── Constants ──
 MAX_STEPS_PER_EPISODE = 40
 VULN_APP_HOST = "127.0.0.1"
 
-# All flags (used for validation in submit_flag)
-FLAGS = {
-    "sqli_login": "FLAG{sqli_login_bypass_2024}",
-    "sqli_union": "FLAG{sqli_union_extract_2024}",
-    "sqli_blind": "FLAG{sqli_blind_boolean_2024}",
-    "command_injection": "FLAG{cmd_injection_rce_2024}",
-    "stored_xss": "FLAG{stored_xss_review_2024}",
-    "reflected_xss": "FLAG{reflected_xss_search_2024}",
-    "default_creds": "FLAG{default_creds_admin_2024}",
-    "jwt_forgery": "FLAG{jwt_forgery_weak_secret_2024}",
-    "bruteforce": "FLAG{bruteforce_no_ratelimit_2024}",
-    "predictable_reset": "FLAG{predictable_reset_token_2024}",
-    "hardcoded_key": "FLAG{hardcoded_api_key_2024}",
-    "verbose_error": "FLAG{verbose_error_stacktrace_2024}",
-    "debug_info": "FLAG{debug_info_leak_2024}",
-    "plaintext_password": "FLAG{plaintext_password_leak_2024}",
-    "idor_user": "FLAG{idor_user_profile_2024}",
-    "idor_message": "FLAG{idor_message_access_2024}",
-    "mass_assignment": "FLAG{mass_assignment_privesc_2024}",
-    "missing_access_control": "FLAG{missing_access_control_2024}",
-    "cors_misconfig": "FLAG{cors_wildcard_creds_2024}",
-    "exposed_env": "FLAG{exposed_env_config_2024}",
-    "missing_headers": "FLAG{missing_security_headers_2024}",
-    "negative_qty": "FLAG{negative_qty_cart_2024}",
-    "discount_stacking": "FLAG{discount_stacking_2024}",
-    "race_condition": "FLAG{race_condition_double_spend_2024}",
-    "price_manipulation": "FLAG{price_manipulation_2024}",
-    "ssrf": "FLAG{ssrf_internal_access_2024}",
-    "path_traversal": "FLAG{path_traversal_read_2024}",
-    "file_upload": "FLAG{insecure_file_upload_2024}",
-    "deserialization": "FLAG{insecure_deserialization_2024}",
-    "ssti": "FLAG{ssti_template_inject_2024}",
-}
-
-# All available tasks
+# All available tasks (each task carries its own flag via task.flag)
 TASKS: dict[str, BaseTask] = {
     "sqli_login": sqli_task,
     "sqli_union": sqli_union_task,
@@ -102,30 +64,30 @@ TASKS: dict[str, BaseTask] = {
     "deserialization": deserialization_task,
 }
 
-# Source files available for agent viewing (relative to vulnerable_app/src/)
+# Source files the agent is allowed to view (relative paths inside vulnerable_app/)
 _VULN_APP_DIR = os.path.join(os.path.dirname(__file__), "vulnerable_app")
-
-VIEWABLE_SOURCE_FILES = {
-    "server.js": os.path.join(_VULN_APP_DIR, "server.js"),
-    "src/app.js": os.path.join(_VULN_APP_DIR, "src", "app.js"),
-    "src/config.js": os.path.join(_VULN_APP_DIR, "src", "config.js"),
-    "src/database.js": os.path.join(_VULN_APP_DIR, "src", "database.js"),
-    "src/middleware/auth.js": os.path.join(_VULN_APP_DIR, "src", "middleware", "auth.js"),
-    "src/middleware/errorHandler.js": os.path.join(_VULN_APP_DIR, "src", "middleware", "errorHandler.js"),
-    "src/routes/auth.js": os.path.join(_VULN_APP_DIR, "src", "routes", "auth.js"),
-    "src/routes/users.js": os.path.join(_VULN_APP_DIR, "src", "routes", "users.js"),
-    "src/routes/products.js": os.path.join(_VULN_APP_DIR, "src", "routes", "products.js"),
-    "src/routes/cart.js": os.path.join(_VULN_APP_DIR, "src", "routes", "cart.js"),
-    "src/routes/checkout.js": os.path.join(_VULN_APP_DIR, "src", "routes", "checkout.js"),
-    "src/routes/admin.js": os.path.join(_VULN_APP_DIR, "src", "routes", "admin.js"),
-    "src/routes/files.js": os.path.join(_VULN_APP_DIR, "src", "routes", "files.js"),
-    "src/routes/messages.js": os.path.join(_VULN_APP_DIR, "src", "routes", "messages.js"),
-    "src/routes/reviews.js": os.path.join(_VULN_APP_DIR, "src", "routes", "reviews.js"),
-    "src/routes/search.js": os.path.join(_VULN_APP_DIR, "src", "routes", "search.js"),
-    "src/routes/feedback.js": os.path.join(_VULN_APP_DIR, "src", "routes", "feedback.js"),
-    "src/routes/import.js": os.path.join(_VULN_APP_DIR, "src", "routes", "import.js"),
-    "src/routes/debug.js": os.path.join(_VULN_APP_DIR, "src", "routes", "debug.js"),
-}
+_SOURCE_FILE_KEYS = [
+    "server.js",
+    "src/app.js",
+    "src/config.js",
+    "src/database.js",
+    "src/middleware/auth.js",
+    "src/middleware/errorHandler.js",
+    "src/routes/auth.js",
+    "src/routes/users.js",
+    "src/routes/products.js",
+    "src/routes/cart.js",
+    "src/routes/checkout.js",
+    "src/routes/admin.js",
+    "src/routes/files.js",
+    "src/routes/messages.js",
+    "src/routes/reviews.js",
+    "src/routes/search.js",
+    "src/routes/feedback.js",
+    "src/routes/import.js",
+    "src/routes/debug.js",
+]
+VIEWABLE_SOURCE_FILES = {key: os.path.join(_VULN_APP_DIR, *key.split("/")) for key in _SOURCE_FILE_KEYS}
 
 
 class CTFEnvironment(MCPEnvironment):
@@ -612,22 +574,12 @@ class CTFEnvironment(MCPEnvironment):
             },
         )
 
-    def step(
-        self,
-        action: Action,
-        timeout_s: Optional[float] = None,
-        **kwargs: Any,
-    ) -> Observation:
-        """
-        Execute a step in the environment.
+    # ── Shared step helpers ──
 
-        Increments step count, checks for max steps, and delegates to
-        the MCP tool handling in the base class.
-        """
+    def _prepare_step(self) -> Observation | None:
+        """Increment step counter; return an early observation if the episode should end."""
         self._state.step_count += 1
         self._step_reward = 0.0
-
-        # Check max steps
         if self._state.step_count >= MAX_STEPS_PER_EPISODE:
             self._done = True
             score = self._grader.grade(self._tracker) if self._grader and self._tracker else 0.0
@@ -640,53 +592,35 @@ class CTFEnvironment(MCPEnvironment):
                     "tracker_summary": self._tracker.get_summary() if self._tracker else {},
                 },
             )
+        return None
 
-        # Delegate to MCPEnvironment for tool handling
+    def _finalize_step(self, obs: Observation) -> Observation:
+        """Attach reward and done status after MCP tool handling."""
+        if self._done:
+            score = self._grader.grade(self._tracker) if self._grader and self._tracker else 0.0
+            obs.done = True
+            obs.reward = score
+        else:
+            obs.reward = self._step_reward
+        return obs
+
+    # ── Public step API ──
+
+    def step(self, action: Action, timeout_s: Optional[float] = None, **kwargs: Any) -> Observation:
+        """Execute one synchronous environment step."""
+        early = self._prepare_step()
+        if early is not None:
+            return early
         obs = super().step(action, timeout_s=timeout_s, **kwargs)
+        return self._finalize_step(obs)
 
-        # Attach reward and done status to observation
-        if self._done:
-            score = self._grader.grade(self._tracker) if self._grader and self._tracker else 0.0
-            obs.done = True
-            obs.reward = score
-        else:
-            obs.reward = self._step_reward
-
-        return obs
-
-    async def step_async(
-        self,
-        action: Action,
-        timeout_s: Optional[float] = None,
-        **kwargs: Any,
-    ) -> Observation:
-        """Async step used by the WebSocket handler."""
-        self._state.step_count += 1
-        self._step_reward = 0.0
-
-        if self._state.step_count >= MAX_STEPS_PER_EPISODE:
-            self._done = True
-            score = self._grader.grade(self._tracker) if self._grader and self._tracker else 0.0
-            return Observation(
-                done=True,
-                reward=score,
-                metadata={
-                    "message": "Maximum steps reached. Episode ended.",
-                    "final_score": score,
-                    "tracker_summary": self._tracker.get_summary() if self._tracker else {},
-                },
-            )
-
+    async def step_async(self, action: Action, timeout_s: Optional[float] = None, **kwargs: Any) -> Observation:
+        """Execute one asynchronous environment step (WebSocket handler)."""
+        early = self._prepare_step()
+        if early is not None:
+            return early
         obs = await super().step_async(action, timeout_s=timeout_s, **kwargs)
-
-        if self._done:
-            score = self._grader.grade(self._tracker) if self._grader and self._tracker else 0.0
-            obs.done = True
-            obs.reward = score
-        else:
-            obs.reward = self._step_reward
-
-        return obs
+        return self._finalize_step(obs)
 
     @property
     def state(self) -> State:

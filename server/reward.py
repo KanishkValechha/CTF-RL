@@ -143,10 +143,6 @@ class RewardTracker:
             return 0.0
         return -0.05
 
-    def _elegance_bonus(self) -> float:
-        """Backward-compatible alias for the precision bonus."""
-        return self._precision_bonus()
-
     def _noise_penalty(self) -> float:
         """Soft penalty for repeated, low-signal actions."""
         if self.total_steps == 0:

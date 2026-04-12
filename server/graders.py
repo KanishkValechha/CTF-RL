@@ -38,7 +38,7 @@ class TaskGrader:
             total_steps=tracker.total_steps,
             optimal_steps=self.task.optimal_steps,
             noise_count=tracker.noise_count,
-            elegance_bonus=tracker._elegance_bonus(),
+            elegance_bonus=tracker._precision_bonus(),
             precision_bonus=tracker._precision_bonus(),
             noise_penalty=tracker._noise_penalty(),
             detection_risk=tracker.detection_risk(),
